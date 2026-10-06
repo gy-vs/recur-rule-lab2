@@ -4112,3 +4112,110 @@ describe('RRule', function () {
     )
   })
 })
+
+describe('RRule processed options round-trip', function () {
+  const scenarios: {
+    rruleString: string
+    dates: string[]
+    text: string
+  }[] = [
+    {
+      rruleString:
+        'DTSTART:20240101T090000Z\nRRULE:FREQ=MONTHLY;COUNT=3;BYDAY=-1FR',
+      dates: [
+        '2024-01-26T09:00:00.000Z',
+        '2024-02-23T09:00:00.000Z',
+        '2024-03-29T09:00:00.000Z',
+      ],
+      text: 'every month on the last Friday for 3 times',
+    },
+    {
+      rruleString:
+        'DTSTART:20240101T090000Z\nRRULE:FREQ=MONTHLY;COUNT=3;BYMONTHDAY=1,-1',
+      dates: [
+        '2024-01-01T09:00:00.000Z',
+        '2024-01-31T09:00:00.000Z',
+        '2024-02-01T09:00:00.000Z',
+      ],
+      text: 'every month on the 1st and last for 3 times',
+    },
+    {
+      rruleString:
+        'DTSTART:20240101T090000Z\nRRULE:FREQ=MONTHLY;COUNT=3;BYDAY=1MO,-1FR',
+      dates: [
+        '2024-01-01T09:00:00.000Z',
+        '2024-01-26T09:00:00.000Z',
+        '2024-02-05T09:00:00.000Z',
+      ],
+      text: 'every month on the 1st Monday and last Friday for 3 times',
+    },
+    {
+      rruleString:
+        'DTSTART:20240101T090000Z\nRRULE:FREQ=YEARLY;COUNT=2;BYMONTH=3;BYDAY=+2SU',
+      dates: ['2024-03-10T09:00:00.000Z', '2025-03-09T09:00:00.000Z'],
+      text: 'every March on the 2nd Sunday for 2 times',
+    },
+  ]
+
+  scenarios.forEach(({ rruleString, dates, text }) => {
+    describe(rruleString, () => {
+      it('rebuilds an identical rule from rule.options', () => {
+        const rule = rrulestr(rruleString) as RRule
+        expect(rule.all().map((d) => d.toISOString())).toEqual(dates)
+
+        const copy = new RRule({ ...rule.options })
+        expect(copy.all().map((d) => d.toISOString())).toEqual(dates)
+      })
+
+      it('round-trips optionsToString(rule.options) through rrulestr', () => {
+        const rule = rrulestr(rruleString) as RRule
+        const str = RRule.optionsToString(rule.options)
+
+        // only standard RFC 5545 properties may appear
+        expect(str).not.toContain('BYNWEEKDAY')
+        expect(str).not.toContain('BYNMONTHDAY')
+
+        const restored = rrulestr(str) as RRule
+        expect(restored.all().map((d) => d.toISOString())).toEqual(dates)
+      })
+
+      it('keeps the text description on a rule rebuilt from rule.options', () => {
+        const rule = rrulestr(rruleString) as RRule
+        const copy = new RRule({ ...rule.options })
+
+        expect(rule.toText()).toBe(text)
+        expect(copy.toText()).toBe(text)
+        expect(copy.isFullyConvertibleToText()).toBe(true)
+      })
+    })
+  })
+
+  it('serializes the internal split options as standard properties', () => {
+    const lastFriday = rrulestr(
+      'DTSTART:20240101T090000Z\nRRULE:FREQ=MONTHLY;COUNT=3;BYDAY=-1FR'
+    ) as RRule
+    expect(RRule.optionsToString(lastFriday.options)).toContain('BYDAY=-1FR')
+
+    const monthEdges = rrulestr(
+      'DTSTART:20240101T090000Z\nRRULE:FREQ=MONTHLY;COUNT=3;BYMONTHDAY=1,-1'
+    ) as RRule
+    expect(RRule.optionsToString(monthEdges.options)).toContain(
+      'BYMONTHDAY=1,-1'
+    )
+  })
+
+  it('supports changing options while copying a rule', () => {
+    const rule = rrulestr(
+      'DTSTART:20240101T090000Z\nRRULE:FREQ=MONTHLY;COUNT=3;BYDAY=-1FR'
+    ) as RRule
+
+    const copy = new RRule({ ...rule.options, count: 5 })
+    expect(copy.all().map((d) => d.toISOString())).toEqual([
+      '2024-01-26T09:00:00.000Z',
+      '2024-02-23T09:00:00.000Z',
+      '2024-03-29T09:00:00.000Z',
+      '2024-04-26T09:00:00.000Z',
+      '2024-05-31T09:00:00.000Z',
+    ])
+  })
+})

@@ -2,7 +2,7 @@ import ENGLISH, { Language } from './i18n'
 import { RRule } from '../rrule'
 import { Options, ByWeekday } from '../types'
 import { Weekday } from '../weekday'
-import { isArray, isNumber, isPresent } from '../helpers'
+import { isArray, isNumber, isPresent, notEmpty, toArray } from '../helpers'
 
 // =============================================================================
 // Helper functions
@@ -81,10 +81,19 @@ export default class ToText {
       if (!this.bymonthday.length) this.bymonthday = null
     }
 
-    if (isPresent(this.origOptions.byweekday)) {
-      const byweekday = !isArray(this.origOptions.byweekday)
-        ? [this.origOptions.byweekday]
-        : this.origOptions.byweekday
+    const origByweekday = isPresent(this.origOptions.byweekday)
+      ? toArray(this.origOptions.byweekday)
+      : []
+    // Processed options (e.g. a rule rebuilt from `rule.options`) carry
+    // ordinal weekdays as [weekday, n] pairs in `bynweekday`.
+    const origBynweekday = notEmpty(this.origOptions.bynweekday)
+      ? this.origOptions.bynweekday.map(
+          ([weekday, n]) => new Weekday(weekday, n)
+        )
+      : []
+    const byweekday: ByWeekday[] = [...origByweekday, ...origBynweekday]
+
+    if (byweekday.length) {
       const days = String(byweekday)
 
       this.byweekday = {

@@ -70,7 +70,9 @@ export function parseOptions(options: Partial<Options>) {
       notEmpty(opts.byyearday as number[]) ||
       Boolean(opts.bymonthday) ||
       notEmpty(opts.bymonthday as number[]) ||
+      notEmpty(opts.bynmonthday) ||
       isPresent(opts.byweekday) ||
+      notEmpty(opts.bynweekday) ||
       isPresent(opts.byeaster)
     )
   ) {
@@ -105,10 +107,12 @@ export function parseOptions(options: Partial<Options>) {
   // bymonthday
   if (!isPresent(opts.bymonthday)) {
     opts.bymonthday = []
-    opts.bynmonthday = []
+    opts.bynmonthday = isPresent(opts.bynmonthday) ? opts.bynmonthday : []
   } else if (isArray(opts.bymonthday)) {
     const bymonthday = []
-    const bynmonthday = []
+    // `bynmonthday` may already be set when re-parsing processed options
+    // (e.g. `new RRule(rule.options)`); keep those days.
+    const bynmonthday = notEmpty(opts.bynmonthday) ? [...opts.bynmonthday] : []
 
     for (let i = 0; i < opts.bymonthday.length; i++) {
       const v = opts.bymonthday[i]
@@ -134,25 +138,29 @@ export function parseOptions(options: Partial<Options>) {
   }
 
   // byweekday / bynweekday
+  // `bynweekday` may already be set when re-parsing processed options
+  // (e.g. `new RRule(rule.options)`); keep those ordinal weekdays.
+  const bynweekdayOption = notEmpty(opts.bynweekday) ? opts.bynweekday : null
+
   if (!isPresent(opts.byweekday)) {
-    opts.bynweekday = null
+    opts.bynweekday = bynweekdayOption
   } else if (isNumber(opts.byweekday)) {
     opts.byweekday = [opts.byweekday]
-    opts.bynweekday = null
+    opts.bynweekday = bynweekdayOption
   } else if (isWeekdayStr(opts.byweekday)) {
     opts.byweekday = [Weekday.fromStr(opts.byweekday).weekday]
-    opts.bynweekday = null
+    opts.bynweekday = bynweekdayOption
   } else if (opts.byweekday instanceof Weekday) {
     if (!opts.byweekday.n || opts.freq > RRule.MONTHLY) {
       opts.byweekday = [opts.byweekday.weekday]
-      opts.bynweekday = null
+      opts.bynweekday = bynweekdayOption
     } else {
       opts.bynweekday = [[opts.byweekday.weekday, opts.byweekday.n]]
       opts.byweekday = null
     }
   } else {
     const byweekday: number[] = []
-    const bynweekday = []
+    const bynweekday = bynweekdayOption ? [...bynweekdayOption] : []
 
     for (let i = 0; i < opts.byweekday.length; i++) {
       const wday = opts.byweekday[i]
