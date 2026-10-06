@@ -13,7 +13,12 @@ import {
   QueryMethodTypes,
   IterResultType,
 } from './types'
-import { parseOptions, initializeOptions } from './parseoptions'
+import {
+  parseOptions,
+  initializeOptions,
+  areParsedOptions,
+  rehydrateParsedOptions,
+} from './parseoptions'
 import { parseString } from './parsestring'
 import { optionsToString } from './optionstostring'
 import { Cache, CacheKeys } from './cache'
@@ -101,9 +106,17 @@ export class RRule implements QueryMethods {
     // RFC string
     this._cache = noCache ? null : new Cache()
 
+    // Passing an already parsed set of options (e.g. `new RRule(rule.options)`)
+    // feeds the internal bynweekday / bynmonthday fields back in. Rebuild the
+    // documented public options so toString(), toText() and iteration all see
+    // the exact same rule.
+    const normalizedOptions = areParsedOptions(options)
+      ? rehydrateParsedOptions(options)
+      : options
+
     // used by toString()
-    this.origOptions = initializeOptions(options)
-    const { parsedOptions } = parseOptions(options)
+    this.origOptions = initializeOptions(normalizedOptions)
+    const { parsedOptions } = parseOptions(normalizedOptions)
     this.options = parsedOptions
   }
 

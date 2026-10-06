@@ -1,4 +1,9 @@
-import { Options, ParsedOptions, freqIsDailyOrGreater } from './types'
+import {
+  Options,
+  ParsedOptions,
+  ByWeekday,
+  freqIsDailyOrGreater,
+} from './types'
 import {
   includes,
   notEmpty,
@@ -6,6 +11,7 @@ import {
   isNumber,
   isArray,
   isWeekdayStr,
+  toArray,
 } from './helpers'
 import { RRule, defaultKeys, DEFAULT_OPTIONS } from './rrule'
 import { getWeekday, isDate, isValidDate } from './dateutil'
@@ -33,6 +39,12 @@ export function initializeOptions(options: Partial<Options>) {
 
 export function parseOptions(options: Partial<Options>) {
   const opts = { ...DEFAULT_OPTIONS, ...initializeOptions(options) }
+
+  // Re-parsing an already parsed set of options (e.g. `new RRule(rule.options)`)
+  // feeds the internal bynweekday / bynmonthday fields back in. They are not a
+  // public input format, so fold them back into the public byweekday /
+  // bymonthday options before any normalization takes place.
+  rehydrateInternalByRules(opts)
 
   if (isPresent(opts.byeaster)) opts.freq = RRule.YEARLY
 
@@ -199,6 +211,90 @@ export function parseOptions(options: Partial<Options>) {
   }
 
   return { parsedOptions: opts as ParsedOptions }
+}
+
+/**
+ * Folds the internal bynweekday / bynmonthday fields (only ever produced by
+ * parseOptions itself) back into the public byweekday / bymonthday options.
+ *
+ * This makes passing a parsed `rule.options` object back into `new RRule()` a
+ * round trip: the internal fields are not part of the documented input format
+ * and would otherwise be silently dropped (taking the ordinal / negative
+ * constraints with them) or emitted as non-standard properties.
+ */
+function rehydrateInternalByRules(opts: Partial<Options>) {
+  if (notEmpty(opts.bynmonthday)) {
+    const bymonthday: number[] = []
+
+    const push = (v: number) => {
+      if (!bymonthday.includes(v)) bymonthday.push(v)
+    }
+
+    if (isPresent(opts.bymonthday)) {
+      ;(isArray(opts.bymonthday) ? opts.bymonthday : [opts.bymonthday]).forEach(
+        push
+      )
+    }
+    opts.bynmonthday.forEach(push)
+    opts.bymonthday = bymonthday
+  }
+
+  if (notEmpty(opts.bynweekday)) {
+    const byweekday: ByWeekday[] = []
+
+    if (isPresent(opts.byweekday)) {
+      ;(isArray(opts.byweekday) ? opts.byweekday : [opts.byweekday]).forEach(
+        (wday) => byweekday.push(wday)
+      )
+    }
+
+    for (const [weekday, n] of opts.bynweekday) {
+      byweekday.push(new Weekday(weekday, n))
+    }
+
+    opts.byweekday = byweekday
+  }
+}
+
+/**
+ * Returns true when the given input options were produced by a previous
+ * parseOptions() call (i.e. they carry the internal bynweekday /
+ * bynmonthday fields).
+ */
+export function areParsedOptions(options: Partial<Options>): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(options, 'bynweekday') ||
+    Object.prototype.hasOwnProperty.call(options, 'bynmonthday')
+  )
+}
+
+/**
+ * Rebuilds the documented, public options shape from an already parsed set of
+ * options, so `new RRule(rule.options)` keeps the exact same rule.
+ *
+ * The internal bynweekday / bynmonthday fields are folded back into
+ * byweekday (as Weekday instances) and bymonthday (positive and negative
+ * numbers) and then dropped.
+ */
+export function rehydrateParsedOptions(
+  options: Partial<Options>
+): Partial<Options> {
+  const opts: Partial<Options> = { ...options }
+  rehydrateInternalByRules(opts)
+
+  // Plain numeric weekdays (kept as numbers by parseOptions) are normalized
+  // into Weekday instances, which is what toText()/optionsToString() expect
+  // from a user-supplied byweekday.
+  if (isPresent(opts.byweekday)) {
+    opts.byweekday = toArray<ByWeekday>(opts.byweekday).map((wday) =>
+      typeof wday === 'number' ? new Weekday(wday) : wday
+    )
+  }
+
+  delete opts.bynweekday
+  delete opts.bynmonthday
+
+  return opts
 }
 
 export function buildTimeset(opts: ParsedOptions) {

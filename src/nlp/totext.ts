@@ -48,7 +48,7 @@ export default class ToText {
   private language: Language
   private options: Partial<Options>
   private origOptions: Partial<Options>
-  private bymonthday: Options['bymonthday'] | null
+  private bymonthday: Options['bymonthday'] | null = null
   private byweekday: {
     allWeeks: ByWeekday[] | null
     someWeeks: ByWeekday[] | null

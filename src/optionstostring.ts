@@ -62,6 +62,38 @@ export function optionsToString(options: Partial<Options>) {
           .toString()
 
         break
+      case 'BYNWEEKDAY':
+        // Internal, parsed-only field: merge into the standard BYDAY property
+        // instead of emitting the non-standard BYNWEEKDAY name.
+        rrule.push([
+          'BYDAY',
+          (value as number[][])
+            .map(([wday, n]) => new Weekday(wday, n))
+            .toString(),
+        ])
+        continue
+      case 'BYNMONTHDAY':
+        // Internal, parsed-only field: merge into the standard BYMONTHDAY
+        // property instead of emitting the non-standard BYNMONTHDAY name.
+        if (
+          isPresent(options.bymonthday) &&
+          notEmptyMonthday(options.bymonthday)
+        ) {
+          continue
+        }
+        rrule.push([
+          'BYMONTHDAY',
+          toArray<number>(value as number[]).toString(),
+        ])
+        continue
+      case 'BYMONTHDAY':
+        // Combine any negative days kept in the internal bynmonthday field
+        // with the public (positive) bymonthday values.
+        outValue = toArray<number>(value as number[])
+          .concat(toArray<number>(options.bynmonthday ?? []))
+          .toString()
+        break
+
       case 'DTSTART':
         dtstart = buildDtstart(value as number, options.tzid)
         break
@@ -96,6 +128,10 @@ export function optionsToString(options: Partial<Options>) {
   }
 
   return [dtstart, ruleString].filter((x) => !!x).join('\n')
+}
+
+function notEmptyMonthday(value: number | number[] | null) {
+  return isPresent(value) && (isArray(value) ? value.length > 0 : true)
 }
 
 function buildDtstart(dtstart?: number, tzid?: string | null) {
